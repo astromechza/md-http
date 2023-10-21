@@ -5,6 +5,10 @@ A simple, but robust, http server that hosts a single Markdown document over htt
 I built this primarily for hosting a basic reference page hosting links on my home network and I'm sharing
 this because I hope it can fulfill similar use-cases on other internal networks! 
 
+- [Installation](#installation)
+- [FAQ](#faq)
+- [Markdown features](#markdown-features)
+
 ```
 Usage: md-http [options...] <filepath>
   -css string
