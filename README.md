@@ -2,7 +2,7 @@
 
 A simple, but robust, http server that hosts a single Markdown document over http.
 
-I built this primarily for hosting a basic reference page hosting links on my home network and I'm sharing
+I built this for hosting a basic reference page hosting links on my home network and I'm sharing
 this because I hope it can fulfill similar use-cases on other internal networks! 
 
 - [Installation](#installation)
@@ -24,9 +24,9 @@ All options also have an environment variable counterpart: MDHTTP_<option>=<valu
 More details about this binary can be found at the source repo: https://github.com/astromechza/md-http.
 ```
 
-The screenshot below as taken when I ran the following: `go run github.com/astromechza/md-http@v1.1.0 -css https://cdn.jsdelivr.net/npm/water.css@2/out/water.css ./README.md`.
+The screenshot below was taken when I ran the following: `go run github.com/astromechza/md-http@v1.1.0 -css https://cdn.jsdelivr.net/npm/water.css@2/out/water.css ./README.md`.
 
-![screenshot of rendered README.md](screenshot.png)
+![screenshot of rendered README.md](screenshot.jpg)
 
 ## Installation
 
@@ -47,7 +47,7 @@ Usage: md-http [options...] <filepath>
 
 ### Install inside your own Docker image
 
-I don't host a base Docker image for this binary. If you want to embed it in an image, use a multistep builder. See [Dockerfile](./Dockerfile):
+I don't host a Docker image for this binary. If you want to embed it in an image, use a multistep builder. See [Dockerfile](./Dockerfile):
 
 ```
 FROM golang:1-alpine AS builder
@@ -61,7 +61,7 @@ ENTRYPOINT ["/md-http", "markdown.md"]
 
 ### Git clone and build
 
-If the above option do not work, because github.com does not resolve, or dependencies cannot be found,
+If the above options do not work, because github.com does not resolve, or dependencies cannot be found,
 clone this repo and build with the vendored dependencies.
 
 ```
