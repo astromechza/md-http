@@ -1,5 +1,6 @@
 FROM golang:1-alpine AS builder
-RUN go install -v github.com/astromechza/md-http@v1.1.0
+# Cshoose the latest version from https://github.com/astromechza/md-http/releases
+RUN go install -v github.com/astromechza/md-http@latest
 
 FROM alpine
 COPY --from=builder /go/bin/md-http /md-http

@@ -35,7 +35,7 @@ The screenshot below was taken when I ran the following: `go run github.com/astr
 
 ## Installation
 
-You can run or install this in a few different ways:
+You can run or install this in a few different ways. In all cases, check https://github.com/astromechza/md-http/releases for the latest version tag.
 
 ### Compile and run directly with `go run`
 
@@ -56,7 +56,7 @@ I don't host a Docker image for this binary. If you want to embed it in an image
 
 ```
 FROM golang:1-alpine AS builder
-RUN go install -v github.com/astromechza/md-http@v1.1.0
+RUN go install -v github.com/astromechza/md-http@latest
 
 FROM alpine
 COPY --from=builder /go/bin/md-http /md-http
