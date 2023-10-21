@@ -91,11 +91,26 @@ func mainInner(args []string, output io.Writer) error {
 		Level:     map[bool]slog.Level{false: slog.LevelInfo, true: slog.LevelDebug}[debugLevel],
 	})))
 
-	return run(addrPort, fs.Arg(0), cssUrl, pageTitle)
+	// open a context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// wait until the context finishes and call cancel
+	go func() {
+		exit := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
+		signal.Notify(exit, syscall.SIGINT, syscall.SIGTERM)
+
+		// Receive output from signalChan.
+		sig := <-exit
+		slog.Info("Signal caught, stopping context", "signal", sig.String())
+		cancel()
+	}()
+
+	return run(ctx, addrPort, fs.Arg(0), cssUrl, pageTitle)
 }
 
 // run does the real logic of reading the file and running the server
-func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitle string) error {
+func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitle string) error {
 	slog.Debug("reading markdown file", "path", markdownFile)
 	raw, err := os.ReadFile(markdownFile)
 	if err != nil {
@@ -117,7 +132,7 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 			writer.Header().Set("Content-Type", "text/css")
 			_, _ = writer.Write(rawCss)
 		})
-		cssUrl = "./default.css"
+		cssUrl = "default.css"
 	}
 
 	slog.Debug("converting markdown to html")
@@ -184,17 +199,12 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 		slog.Info("response", "method", request.Method, "uri", request.RequestURI, "status", recorder.StatusCode, "bytes", recorder.Written)
 	})}
 	go func() {
-		exit := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
-		signal.Notify(exit, syscall.SIGINT, syscall.SIGTERM)
-
-		// Receive output from signalChan.
-		sig := <-exit
-		slog.Info("Signal caught, stopping http server", "signal", sig.String())
+		<-ctx.Done()
+		slog.Info("Signal caught, stopping http server")
 		if err := server.Shutdown(context.Background()); err != nil {
 			slog.Error("Failure during shutdown", "err", err)
 		}
 	}()
-
 	slog.Info("Starting http server", "listen", "http://"+listenAddr.String())
 	return server.ListenAndServe()
 }
