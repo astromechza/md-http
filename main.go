@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -208,11 +210,22 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		writer.WriteHeader(http.StatusNotFound)
 	})
 
+	hashString := fmt.Sprintf("%x", sha256.Sum256(htmlContent))
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != "GET" {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+		if v := request.Header.Get("If-Match"); v != "" && v != hashString {
+			writer.WriteHeader(http.StatusPreconditionFailed)
+			return
+		} else if v := request.Header.Get("If-None-Match"); v != "" && v == hashString {
+			writer.Header().Set("Content-Length", strconv.Itoa(len(htmlContent)))
+			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+			writer.WriteHeader(http.StatusNotModified)
+			return
+		}
+		writer.Header().Set("Etag", hashString)
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = writer.Write(htmlContent)
 	})
