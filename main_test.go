@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -47,7 +48,7 @@ func TestRunNominal(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
-		assert.EqualError(t, run(ctx, addrPort, mdPath, cssPath, "some title"), http.ErrServerClosed.Error())
+		assert.EqualError(t, run(ctx, argsStruct{AddrPort: addrPort, MarkdownFile: mdPath, CssUrl: cssPath, PageTitle: "some title"}), http.ErrServerClosed.Error())
 	}()
 
 	for {
@@ -101,4 +102,65 @@ func TestRunNominal(t *testing.T) {
 
 	cancel()
 	wg.Done()
+}
+
+func TestParse_minimum(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# example header\n\n"), 0400))
+
+	buff := new(bytes.Buffer)
+	args, err := parse([]string{"binary", mdPath}, buff)
+	assert.NoError(t, err)
+	assert.Equal(t, argsStruct{
+		PageTitle:    "Landing page",
+		MarkdownFile: mdPath,
+		AddrPort:     netip.AddrPortFrom(netip.AddrFrom4([4]byte{0, 0, 0, 0}), 8080),
+	}, args)
+}
+
+func TestParse_all(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# example header\n\n"), 0400))
+
+	cssPath := filepath.Join(t.TempDir(), "example.css")
+	require.NoError(t, os.WriteFile(cssPath, []byte(""), 0400))
+
+	buff := new(bytes.Buffer)
+	args, err := parse([]string{"binary", "-css", cssPath, "-debug", "-title", "Thing", "-listen", "127.0.0.1:8090", "-jsonlog", mdPath}, buff)
+	assert.NoError(t, err)
+	assert.Equal(t, argsStruct{
+		PageTitle:    "Thing",
+		MarkdownFile: mdPath,
+		CssUrl:       cssPath,
+		AddrPort:     netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 0, 0, 1}), 8090),
+		LogDebug:     true,
+		LogJson:      true,
+	}, args)
+}
+
+func TestParse_env(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# example header\n\n"), 0400))
+
+	cssPath := filepath.Join(t.TempDir(), "example.css")
+	require.NoError(t, os.WriteFile(cssPath, []byte(""), 0400))
+
+	defer os.Clearenv()
+	require.NoError(t, os.Setenv("MDHTTP_css", cssPath))
+	require.NoError(t, os.Setenv("MDHTTP_title", "Thing"))
+	require.NoError(t, os.Setenv("MDHTTP_listen", "127.0.0.1:8090"))
+	require.NoError(t, os.Setenv("MDHTTP_debug", "true"))
+	require.NoError(t, os.Setenv("MDHTTP_jsonlog", "true"))
+
+	buff := new(bytes.Buffer)
+	args, err := parse([]string{"binary", mdPath}, buff)
+	assert.NoError(t, err)
+	assert.Equal(t, argsStruct{
+		PageTitle:    "Thing",
+		MarkdownFile: mdPath,
+		CssUrl:       cssPath,
+		AddrPort:     netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 0, 0, 1}), 8090),
+		LogDebug:     true,
+		LogJson:      true,
+	}, args)
 }
