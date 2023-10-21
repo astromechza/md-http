@@ -39,3 +39,34 @@ All options also have an environment variable counterpart: MDHTTP_<option>=<valu
 - Autolinking: https://github.com
 
 [^1]: The footnote content
+
+## Installation
+
+You can run or install this in a few different ways:
+
+### Compile and run directly with `go run`
+
+Good for testing, but not that useful for deployment into a final environment.
+
+```
+$ go run github.com/astromechza/md-http@latest -h
+go: downloading github.com/astromechza/md-http v0.0.0-20231021093316-0e979d460e44
+Expected a single argument as the markdown filepath!
+
+Usage: md-http [options...] <filepath>
+...
+```
+
+### Install inside your own Docker image
+
+I don't host a base Docker image for this binary. If you want to embed it in an image, use a multistep builder:
+
+```
+FROM golang:1-alpine AS builder
+RUN go install -v github.com/astromechza/md-http@latest
+
+FROM alpine
+COPY --from=builder /go/bin/md-http /md-http
+RUN echo "hello world" > markdown.md
+ENTRYPOINT ["/md-http", "markdown.md"]
+```

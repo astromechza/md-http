@@ -98,7 +98,7 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 		return fmt.Errorf("failed to open the file: %w", err)
 	}
 
-	if !strings.HasPrefix(cssUrl, "http://") && !strings.HasPrefix(cssUrl, "https://") {
+	if cssUrl != "" && !strings.HasPrefix(cssUrl, "http://") && !strings.HasPrefix(cssUrl, "https://") {
 		cssUrl = strings.TrimPrefix(cssUrl, "file://")
 		slog.Debug("reading css file", "path", cssUrl)
 		rawCss, err := os.ReadFile(cssUrl)
