@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/russross/blackfriday"
 )
@@ -193,11 +194,17 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 		_, _ = writer.Write(htmlContent)
 	})
 
-	server := &http.Server{Addr: listenAddr.String(), Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
-		http.DefaultServeMux.ServeHTTP(recorder, request)
-		slog.Info("response", "method", request.Method, "uri", request.RequestURI, "status", recorder.StatusCode, "bytes", recorder.Written)
-	})}
+	server := &http.Server{
+		Addr: listenAddr.String(),
+		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
+			http.DefaultServeMux.ServeHTTP(recorder, request)
+			slog.Info("response", "method", request.Method, "uri", request.RequestURI, "status", recorder.StatusCode, "bytes", recorder.Written)
+		}),
+		IdleTimeout:  time.Second * 30,
+		ReadTimeout:  time.Second * 10,
+		WriteTimeout: time.Second * 10,
+	}
 	go func() {
 		<-ctx.Done()
 		slog.Info("Signal caught, stopping http server")
