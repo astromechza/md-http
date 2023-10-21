@@ -6,6 +6,7 @@ I built this for hosting a basic reference page hosting links on my home network
 this because I hope it can fulfill similar use-cases on other internal networks! 
 
 - [Installation](#installation)
+- [Deployment](#deployment)
 - [FAQ](#faq)
 - [Markdown features](#markdown-features)
 
@@ -75,6 +76,15 @@ $ go build -o md-http .
 $ ./md-http README.md
 ```
 
+## Deployment
+
+We suggest:
+
+- Build a container with any custom css (`-css example.css`) and favicon (`-favicon example.ico`) embedded.
+- Customise the page title using environment variables (`MDHTTP_title`).
+- Setup the liveness and readiness checks to point towards the `/healthz` route on the main interface.
+- Configure the ingress or proxy to add caching, metrics, tracing, or any other value added extras.
+
 ## FAQ
 
 ### What if I want to serve a directory of files, not just 1?
@@ -85,14 +95,14 @@ Unfortunately, this isn't the project for you. You are probably looking for some
 
 Again, unfortunately that isn't a priority for this project. Host the image elsewhere and embed a link to it.
 
-Alternatively, you can use raw html to embed a svg image:
+Alternatively, you can use raw html to embed a svg image (not visible on github):
 
 <svg width="70" height="70">
   <rect x="10" y="10" rx="10" ry="10" width="50" height="50"
   style="fill:red;stroke:black;stroke-width:5;opacity:0.5" />
 </svg>
 
-Or a base64 encoded image:
+Or a base64 encoded image (not visible on github):
 
 <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAADMElEQVR4nOzVwQnAIBQFQYXff81RUkQCOyDj1YOPnbXWPmeTRef+/3O/OyBjzh3CD95BfqICMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMK0CMO0TAAD//2Anhf4QtqobAAAAAElFTkSuQmCC" />
 
