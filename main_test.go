@@ -45,10 +45,17 @@ func TestRunNominal(t *testing.T) {
 	cssPath := filepath.Join(t.TempDir(), "some.css")
 	require.NoError(t, os.WriteFile(cssPath, []byte("body { color: red; }"), 0400))
 
+	faviconPath := filepath.Join(t.TempDir(), "some.png")
+	require.NoError(t, os.WriteFile(faviconPath, []byte(""), 0400))
+
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
-		assert.EqualError(t, run(ctx, argsStruct{AddrPort: addrPort, MarkdownFile: mdPath, CssUrl: cssPath, PageTitle: "some title"}), http.ErrServerClosed.Error())
+		assert.EqualError(t, run(ctx, argsStruct{
+			AddrPort:     addrPort,
+			PageTitle:    "some title",
+			MarkdownFile: mdPath, CssUrl: cssPath, FaviconUrl: faviconPath,
+		}), http.ErrServerClosed.Error())
 	}()
 
 	for {
@@ -134,6 +141,26 @@ func TestRunNominal(t *testing.T) {
 
 		data, _ := io.ReadAll(resp.Body)
 		assert.Equal(t, `body { color: red; }`, string(data))
+	})
+
+	t.Run("test favicon", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/favicon.ico", port), nil)
+		http.DefaultClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+		assert.Equal(t, "default-favicon.png", resp.Header.Get("Location"))
+
+		resp, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/default-favicon.png", port))
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "image/png", resp.Header.Get("Content-Type"))
 	})
 
 	cancel()

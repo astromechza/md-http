@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/netip"
 	"os"
@@ -25,6 +26,7 @@ const (
 	DefaultListenAddr  = "0.0.0.0:8080"
 	DefaultPageTitle   = "Landing page"
 	DefaultCssUrl      = ""
+	DefaultFaviconUrl  = ""
 	DefaultDebug       = false
 	DefaultUsagePrefix = `Usage: md-http [options...] <filepath>
 `
@@ -82,6 +84,7 @@ type argsStruct struct {
 	MarkdownFile string
 	PageTitle    string
 	CssUrl       string
+	FaviconUrl   string
 	LogDebug     bool
 	LogJson      bool
 }
@@ -98,6 +101,7 @@ func parse(args []string, output io.Writer) (argsStruct, error) {
 	fs.StringVar(&receiver.CssUrl, "css", DefaultCssUrl, "An optional css file path or url (http:// or https://) to serve in the output")
 	fs.BoolVar(&receiver.LogDebug, "debug", DefaultDebug, "Enable debug logging")
 	fs.BoolVar(&receiver.LogJson, "jsonlog", false, "Switch to structured json logging")
+	fs.StringVar(&receiver.FaviconUrl, "favicon", DefaultFaviconUrl, "An optional favicon file path or url (http:// or https://) to serve with the output")
 
 	fs.Usage = func() {
 		_, _ = fs.Output().Write([]byte(DefaultUsagePrefix))
@@ -161,6 +165,25 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		parsedArgs.CssUrl = "default.css"
 	}
 
+	if parsedArgs.FaviconUrl != "" && !strings.HasPrefix(parsedArgs.FaviconUrl, "http://") && !strings.HasPrefix(parsedArgs.FaviconUrl, "https://") {
+		parsedArgs.FaviconUrl = strings.TrimPrefix(parsedArgs.FaviconUrl, "file://")
+		slog.Debug("reading favicon file", "path", parsedArgs.FaviconUrl)
+		rawIcon, err := os.ReadFile(parsedArgs.FaviconUrl)
+		if err != nil {
+			return fmt.Errorf("failed to read the favicon file: %v", err)
+		}
+		ext := filepath.Ext(parsedArgs.FaviconUrl)
+		parsedArgs.FaviconUrl = "default-favicon" + ext
+		http.HandleFunc("/"+parsedArgs.FaviconUrl, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != "GET" {
+				writer.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			writer.Header().Set("Content-Type", mime.TypeByExtension(ext))
+			_, _ = writer.Write(rawIcon)
+		})
+	}
+
 	slog.Debug("converting markdown to html")
 	htmlContent := blackfriday.Markdown(
 		raw,
@@ -205,6 +228,11 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 	http.HandleFunc("/favicon.ico", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != "GET" {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if parsedArgs.FaviconUrl != "" {
+			writer.Header().Set("Location", parsedArgs.FaviconUrl)
+			writer.WriteHeader(http.StatusTemporaryRedirect)
 			return
 		}
 		writer.WriteHeader(http.StatusNotFound)
