@@ -15,6 +15,8 @@ Usage: md-http [options...] <filepath>
     	An optional css file path or url (http:// or https://) to serve in the output
   -debug
     	Enable debug logging
+  -favicon string
+    	An optional favicon file path or url (http:// or https://) to serve with the output
   -jsonlog
     	Switch to structured json logging
   -listen string
