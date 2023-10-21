@@ -43,54 +43,19 @@ func main() {
 // mainInner is the real interface entrypoint, but testable.
 // This defines the flags, validation, and parsing options.
 func mainInner(args []string, output io.Writer) error {
-	fs := flag.NewFlagSet(filepath.Base(args[0]), flag.ContinueOnError)
-
-	fs.SetOutput(output)
-	var listenAddr string
-	fs.StringVar(&listenAddr, "listen", DefaultListenAddr, "The socket address to listen on")
-	var pageTitle string
-	fs.StringVar(&pageTitle, "title", DefaultPageTitle, "The HTML title of the page")
-	var cssUrl string
-	fs.StringVar(&cssUrl, "css", DefaultCssUrl, "An optional css file path or url (http:// or https://) to serve in the output")
-	var debugLevel bool
-	fs.BoolVar(&debugLevel, "debug", DefaultDebug, "Enable debug logging")
-
-	fs.Usage = func() {
-		_, _ = fs.Output().Write([]byte(DefaultUsagePrefix))
-		fs.PrintDefaults()
-		_, _ = fs.Output().Write([]byte(DefaultUsageSuffix))
-	}
-	var err error
-	fs.VisitAll(func(f *flag.Flag) {
-		if value, ok := os.LookupEnv(f.Name); ok {
-			if fErr := fs.Set(f.Name, value); fErr != nil {
-				err = fErr
-			}
-		}
-	})
-	if err := fs.Parse(args[1:]); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
+	parsedArgs, err := parse(args, output)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
-		_, _ = fs.Output().Write([]byte("Expected a single argument as the markdown filepath!\n\n"))
-		fs.Usage()
-		return http.ErrServerClosed
+	logOptions := &slog.HandlerOptions{
+		AddSource: parsedArgs.LogDebug,
+		Level:     map[bool]slog.Level{false: slog.LevelInfo, true: slog.LevelDebug}[parsedArgs.LogDebug],
 	}
-
-	addrPort, err := netip.ParseAddrPort(listenAddr)
-	if err != nil {
-		_, _ = fmt.Fprintf(fs.Output(), "Invalid value for 'listen' '%s'\n\n", listenAddr)
-		fs.Usage()
-		return http.ErrServerClosed
+	if parsedArgs.LogJson {
+		slog.SetDefault(slog.New(slog.NewJSONHandler(output, logOptions)))
+	} else {
+		slog.SetDefault(slog.New(slog.NewTextHandler(output, logOptions)))
 	}
-
-	slog.SetDefault(slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{
-		AddSource: debugLevel,
-		Level:     map[bool]slog.Level{false: slog.LevelInfo, true: slog.LevelDebug}[debugLevel],
-	})))
 
 	// open a context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -107,21 +72,79 @@ func mainInner(args []string, output io.Writer) error {
 		cancel()
 	}()
 
-	return run(ctx, addrPort, fs.Arg(0), cssUrl, pageTitle)
+	return run(ctx, parsedArgs)
+}
+
+type argsStruct struct {
+	AddrPort     netip.AddrPort
+	MarkdownFile string
+	PageTitle    string
+	CssUrl       string
+	LogDebug     bool
+	LogJson      bool
+}
+
+func parse(args []string, output io.Writer) (argsStruct, error) {
+	fs := flag.NewFlagSet(filepath.Base(args[0]), flag.ContinueOnError)
+	fs.SetOutput(output)
+
+	receiver := new(argsStruct)
+
+	var listenAddr string
+	fs.StringVar(&listenAddr, "listen", DefaultListenAddr, "The socket address to listen on")
+	fs.StringVar(&receiver.PageTitle, "title", DefaultPageTitle, "The HTML title of the page")
+	fs.StringVar(&receiver.CssUrl, "css", DefaultCssUrl, "An optional css file path or url (http:// or https://) to serve in the output")
+	fs.BoolVar(&receiver.LogDebug, "debug", DefaultDebug, "Enable debug logging")
+	fs.BoolVar(&receiver.LogJson, "jsonlog", false, "Switch to structured json logging")
+
+	fs.Usage = func() {
+		_, _ = fs.Output().Write([]byte(DefaultUsagePrefix))
+		fs.PrintDefaults()
+		_, _ = fs.Output().Write([]byte(DefaultUsageSuffix))
+	}
+	var err error
+	fs.VisitAll(func(f *flag.Flag) {
+		if value, ok := os.LookupEnv("MDHTTP_" + f.Name); ok {
+			if fErr := fs.Set(f.Name, value); fErr != nil {
+				err = fErr
+			}
+		}
+	})
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return *receiver, http.ErrServerClosed
+		}
+		return *receiver, err
+	}
+	if fs.NArg() != 1 {
+		_, _ = fs.Output().Write([]byte("Expected a single argument as the markdown filepath!\n\n"))
+		fs.Usage()
+		return *receiver, http.ErrServerClosed
+	}
+	receiver.MarkdownFile = fs.Arg(0)
+
+	addrPort, err := netip.ParseAddrPort(listenAddr)
+	if err != nil {
+		_, _ = fmt.Fprintf(fs.Output(), "Invalid value for 'listen' '%s'\n\n", listenAddr)
+		fs.Usage()
+		return *receiver, http.ErrServerClosed
+	}
+	receiver.AddrPort = addrPort
+	return *receiver, nil
 }
 
 // run does the real logic of reading the file and running the server
-func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitle string) error {
-	slog.Debug("reading markdown file", "path", markdownFile)
-	raw, err := os.ReadFile(markdownFile)
+func run(ctx context.Context, parsedArgs argsStruct) error {
+	slog.Debug("reading markdown file", "path", parsedArgs.MarkdownFile)
+	raw, err := os.ReadFile(parsedArgs.MarkdownFile)
 	if err != nil {
 		return fmt.Errorf("failed to open the file: %w", err)
 	}
 
-	if cssUrl != "" && !strings.HasPrefix(cssUrl, "http://") && !strings.HasPrefix(cssUrl, "https://") {
-		cssUrl = strings.TrimPrefix(cssUrl, "file://")
-		slog.Debug("reading css file", "path", cssUrl)
-		rawCss, err := os.ReadFile(cssUrl)
+	if parsedArgs.CssUrl != "" && !strings.HasPrefix(parsedArgs.CssUrl, "http://") && !strings.HasPrefix(parsedArgs.CssUrl, "https://") {
+		parsedArgs.CssUrl = strings.TrimPrefix(parsedArgs.CssUrl, "file://")
+		slog.Debug("reading css file", "path", parsedArgs.CssUrl)
+		rawCss, err := os.ReadFile(parsedArgs.CssUrl)
 		if err != nil {
 			return fmt.Errorf("failed to read the css file: %v", err)
 		}
@@ -133,7 +156,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 			writer.Header().Set("Content-Type", "text/css; charset=utf-8")
 			_, _ = writer.Write(rawCss)
 		})
-		cssUrl = "default.css"
+		parsedArgs.CssUrl = "default.css"
 	}
 
 	slog.Debug("converting markdown to html")
@@ -150,8 +173,8 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 				blackfriday.HTML_COMPLETE_PAGE|
 				blackfriday.HTML_FOOTNOTE_RETURN_LINKS|
 				blackfriday.HTML_HREF_TARGET_BLANK,
-			pageTitle,
-			cssUrl,
+			parsedArgs.PageTitle,
+			parsedArgs.CssUrl,
 		),
 		// defaults
 		blackfriday.EXTENSION_NO_INTRA_EMPHASIS|
@@ -195,7 +218,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 	})
 
 	server := &http.Server{
-		Addr: listenAddr.String(),
+		Addr: parsedArgs.AddrPort.String(),
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
 			http.DefaultServeMux.ServeHTTP(recorder, request)
@@ -212,7 +235,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 			slog.Error("Failure during shutdown", "err", err)
 		}
 	}()
-	slog.Info("Starting http server", "listen", "http://"+listenAddr.String())
+	slog.Info("Starting http server", "listen", "http://"+parsedArgs.AddrPort.String())
 	return server.ListenAndServe()
 }
 
