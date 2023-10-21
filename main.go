@@ -23,8 +23,12 @@ const (
 	DefaultPageTitle   = "Landing page"
 	DefaultCssUrl      = ""
 	DefaultDebug       = false
-	DefaultUsagePrefix = "Usage: md-http [options...] <filepath>\n"
-	DefaultUsageSuffix = "\nAll options also have an environment variable counterpart: MDHTTP_<option>=<value>\n"
+	DefaultUsagePrefix = `Usage: md-http [options...] <filepath>
+`
+	DefaultUsageSuffix = `
+All options also have an environment variable counterpart: MDHTTP_<option>=<value>.
+More details about this binary can be found at the source repo: https://github.com/astromechza/md-http.
+`
 )
 
 // main is the entrypoint from the command line to capture the args it is running with
@@ -106,6 +110,10 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 			return fmt.Errorf("failed to read the css file: %v", err)
 		}
 		http.HandleFunc("/default.css", func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != "GET" {
+				writer.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
 			writer.Header().Set("Content-Type", "text/css")
 			_, _ = writer.Write(rawCss)
 		})
@@ -145,20 +153,36 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 	)
 
 	http.HandleFunc("/healthz", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != "GET" {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		writer.Header().Set("Content-Type", "text/plain")
 		_, _ = writer.Write([]byte("healthz check passed"))
 	})
 
 	http.HandleFunc("/favicon.ico", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != "GET" {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		writer.WriteHeader(http.StatusNotFound)
 	})
 
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != "GET" {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		writer.Header().Set("Content-Type", "text/html")
 		_, _ = writer.Write(htmlContent)
 	})
 
-	server := &http.Server{Addr: listenAddr.String(), Handler: http.DefaultServeMux}
+	server := &http.Server{Addr: listenAddr.String(), Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
+		http.DefaultServeMux.ServeHTTP(recorder, request)
+		slog.Info("response", "method", request.Method, "uri", request.RequestURI, "status", recorder.StatusCode, "bytes", recorder.Written)
+	})}
 	go func() {
 		exit := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
 		signal.Notify(exit, syscall.SIGINT, syscall.SIGTERM)
@@ -173,4 +197,25 @@ func run(listenAddr netip.AddrPort, markdownFile string, cssUrl string, pageTitl
 
 	slog.Info("Starting http server", "listen", "http://"+listenAddr.String())
 	return server.ListenAndServe()
+}
+
+type responseRecorder struct {
+	Inner      http.ResponseWriter
+	Written    int64
+	StatusCode int
+}
+
+func (r *responseRecorder) Header() http.Header {
+	return r.Inner.Header()
+}
+
+func (r *responseRecorder) Write(bytes []byte) (int, error) {
+	c, err := r.Inner.Write(bytes)
+	r.Written += int64(c)
+	return c, err
+}
+
+func (r *responseRecorder) WriteHeader(statusCode int) {
+	r.StatusCode = statusCode
+	r.Inner.WriteHeader(statusCode)
 }

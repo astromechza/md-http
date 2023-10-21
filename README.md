@@ -16,29 +16,13 @@ Usage: md-http [options...] <filepath>
   -title string
         The HTML title of the page (default "Landing page")
 
-All options also have an environment variable counterpart: MDHTTP_<option>=<value>
+All options also have an environment variable counterpart: MDHTTP_<option>=<value>.
+More details about this binary can be found at the source repo: https://github.com/astromechza/md-http.
 ```
 
-## Markdown features
+The screenshot below as taken when I ran the following: `go run github.com/astromechza/md-http@v1.1.0 -css https://cdn.jsdelivr.net/npm/water.css@2/out/water.css ./README.md`.
 
-- Most regular common markdown features
-- Tables
-
-    | Syntax      | Description |
-    | ----------- | ----------- |
-    | Header      | Title       |
-    | Paragraph   | Text        |
-
-- Footnotes[^1]
-- Definition Lists
-    
-    Term One
-    : A definition of Term One
-
-- Automatic header ids: [example](#markdown-features)
-- Autolinking: https://github.com
-
-[^1]: The footnote content
+![screenshot of rendered README.md](screenshot.png)
 
 ## Installation
 
@@ -63,7 +47,7 @@ I don't host a base Docker image for this binary. If you want to embed it in an 
 
 ```
 FROM golang:1-alpine AS builder
-RUN go install -v github.com/astromechza/md-http@v1.0.0
+RUN go install -v github.com/astromechza/md-http@v1.1.0
 
 FROM alpine
 COPY --from=builder /go/bin/md-http /md-http
@@ -73,7 +57,7 @@ ENTRYPOINT ["/md-http", "markdown.md"]
 
 ### Git clone and build
 
-If the above option do not work, because github.com does not resolve, or dependencies cannot be found, 
+If the above option do not work, because github.com does not resolve, or dependencies cannot be found,
 clone this repo and build with the vendored dependencies.
 
 ```
@@ -108,3 +92,28 @@ Or a base64 encoded image:
 
 Put this behind a suitable TLS and auth proxy (Nginx, Apache, Traefik, Envoy, etc..).
 Adding this functionality directly to md-http would make it too complex to maintain.
+
+### What if I need extra headers injected for caching or other behaviors?
+
+Again, put this behind a suitable proxy.
+
+## Markdown features
+
+- Most regular common markdown features
+- Tables
+
+    | Syntax      | Description |
+    | ----------- | ----------- |
+    | Header      | Title       |
+    | Paragraph   | Text        |
+
+- Footnotes[^1]
+- Definition Lists
+    
+    Term One
+    : A definition of Term One
+
+- Automatic header ids: [example](#markdown-features)
+- Autolinking: https://github.com
+
+[^1]: The footnote content
