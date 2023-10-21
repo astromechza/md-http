@@ -68,12 +68,48 @@ func TestRunNominal(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "442", resp.Header.Get("Content-Length"))
 
 		data, _ := io.ReadAll(resp.Body)
 		assert.Contains(t, string(data), `<!DOCTYPE html PUBLIC`)
 		assert.Contains(t, string(data), `<title>some title</title>`)
 		assert.Contains(t, string(data), `<h1 id="example-header">example header</h1>`)
 		assert.Contains(t, string(data), `<link rel="stylesheet" type="text/css" href="default.css" />`)
+		assert.Equal(t, "4e0699512fce641ef614fa9f9dbb71a85c3eb7f99d8cbe1bfd5399f11e75927a", resp.Header.Get("Etag"))
+	})
+
+	t.Run("test if-match", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", port), nil)
+		req.Header.Set("If-Match", "4e0699512fce641ef614fa9f9dbb71a85c3eb7f99d8cbe1bfd5399f11e75927a")
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		req, _ = http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", port), nil)
+		req.Header.Set("If-Match", "unknown")
+		resp, err = http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
+	})
+
+	t.Run("test if-none-match", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", port), nil)
+		req.Header.Set("If-None-Match", "4e0699512fce641ef614fa9f9dbb71a85c3eb7f99d8cbe1bfd5399f11e75927a")
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
+		assert.Equal(t, "", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "", resp.Header.Get("Content-Length"))
+
+		req, _ = http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", port), nil)
+		req.Header.Set("If-None-Match", "unknown")
+		resp, err = http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
 	t.Run("test healthz", func(t *testing.T) {

@@ -12,13 +12,15 @@ this because I hope it can fulfill similar use-cases on other internal networks!
 ```
 Usage: md-http [options...] <filepath>
   -css string
-        An optional css file path or url (http:// or https://) to serve in the output
+    	An optional css file path or url (http:// or https://) to serve in the output
   -debug
-        Enable debug logging
+    	Enable debug logging
+  -jsonlog
+    	Switch to structured json logging
   -listen string
-        The socket address to listen on (default "0.0.0.0:8080")
+    	The socket address to listen on (default "0.0.0.0:8080")
   -title string
-        The HTML title of the page (default "Landing page")
+    	The HTML title of the page (default "Landing page")
 
 All options also have an environment variable counterpart: MDHTTP_<option>=<value>.
 More details about this binary can be found at the source repo: https://github.com/astromechza/md-http.
