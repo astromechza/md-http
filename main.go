@@ -129,7 +129,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 				writer.WriteHeader(http.StatusMethodNotAllowed)
 				return
 			}
-			writer.Header().Set("Content-Type", "text/css")
+			writer.Header().Set("Content-Type", "text/css; charset=utf-8")
 			_, _ = writer.Write(rawCss)
 		})
 		cssUrl = "default.css"
@@ -172,7 +172,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		writer.Header().Set("Content-Type", "text/plain")
+		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = writer.Write([]byte("healthz check passed"))
 	})
 
@@ -189,7 +189,7 @@ func run(ctx context.Context, listenAddr netip.AddrPort, markdownFile string, cs
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		writer.Header().Set("Content-Type", "text/html")
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = writer.Write(htmlContent)
 	})
 

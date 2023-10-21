@@ -66,7 +66,7 @@ func TestRunNominal(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		data, _ := io.ReadAll(resp.Body)
 		assert.Contains(t, string(data), `<!DOCTYPE html PUBLIC`)
@@ -81,7 +81,7 @@ func TestRunNominal(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		data, _ := io.ReadAll(resp.Body)
 		assert.Equal(t, `healthz check passed`, string(data))
@@ -93,7 +93,7 @@ func TestRunNominal(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/css", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "text/css; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		data, _ := io.ReadAll(resp.Body)
 		assert.Equal(t, `body { color: red; }`, string(data))
