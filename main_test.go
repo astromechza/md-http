@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,26 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func freePort() (port int, err error) {
-	var a *net.TCPAddr
-	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
-		var l *net.TCPListener
-		if l, err = net.ListenTCP("tcp", a); err == nil {
-			defer l.Close()
-			return l.Addr().(*net.TCPAddr).Port, nil
-		}
-	}
-	return
-}
-
 func TestRunNominal(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	port, err := freePort()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	addrPort, err := netip.ParseAddrPort(fmt.Sprintf("127.0.0.1:%d", port))
-	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
 
 	mdPath := filepath.Join(t.TempDir(), "example.md")
 	require.NoError(t, os.WriteFile(mdPath, []byte("# example header\n\n"), 0400))
@@ -48,25 +34,22 @@ func TestRunNominal(t *testing.T) {
 	faviconPath := filepath.Join(t.TempDir(), "some.png")
 	require.NoError(t, os.WriteFile(faviconPath, []byte(""), 0400))
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		assert.EqualError(t, run(ctx, argsStruct{
-			AddrPort:     addrPort,
+		errCh <- runOnListener(ctx, argsStruct{
 			PageTitle:    "some title",
 			MarkdownFile: mdPath, CssUrl: cssPath, FaviconUrl: faviconPath,
-		}), http.ErrServerClosed.Error())
+		}, listener)
 	}()
 
-	for {
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
 		if err != nil {
-			time.Sleep(time.Second)
-		} else {
-			defer resp.Body.Close()
-			break
+			return false
 		}
-	}
+		resp.Body.Close()
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
 
 	t.Run("test main", func(t *testing.T) {
 		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
@@ -164,7 +147,7 @@ func TestRunNominal(t *testing.T) {
 	})
 
 	cancel()
-	wg.Done()
+	assert.ErrorIs(t, <-errCh, http.ErrServerClosed)
 }
 
 func TestParse_minimum(t *testing.T) {
@@ -199,6 +182,50 @@ func TestParse_all(t *testing.T) {
 		LogDebug:     true,
 		LogJson:      true,
 	}, args)
+}
+
+func TestParse_invalidEnvVar(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# header\n"), 0400))
+
+	t.Setenv("MDHTTP_debug", "not-a-bool")
+
+	buff := new(bytes.Buffer)
+	_, err := parse([]string{"binary", mdPath}, buff)
+	require.Error(t, err)
+}
+
+func TestRun_isolatedMux(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# header\n"), 0400))
+
+	startServer := func() (int, context.CancelFunc, <-chan error) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		port := listener.Addr().(*net.TCPAddr).Port
+		ctx, cancel := context.WithCancel(context.Background())
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- runOnListener(ctx, argsStruct{MarkdownFile: mdPath}, listener)
+		}()
+		require.Eventually(t, func() bool {
+			resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
+			if err != nil {
+				return false
+			}
+			resp.Body.Close()
+			return true
+		}, 5*time.Second, 10*time.Millisecond)
+		return port, cancel, errCh
+	}
+
+	_, cancel1, errCh1 := startServer()
+	_, cancel2, errCh2 := startServer()
+
+	cancel1()
+	assert.ErrorIs(t, <-errCh1, http.ErrServerClosed)
+	cancel2()
+	assert.ErrorIs(t, <-errCh2, http.ErrServerClosed)
 }
 
 func TestParse_env(t *testing.T) {
