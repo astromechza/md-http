@@ -3,21 +3,27 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21']
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
         with:
-          go-version: ${{ matrix.go-version }}
-      - name: Display Go version
-        run: go version
-      - name: Build
-        run: go build -o md-http .
-      - name: Test with the Go CLI
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Test
         timeout-minutes: 1
         run: go test -v .
-      - name: Ensure go binary runs
-        run: ./md-http -help
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
