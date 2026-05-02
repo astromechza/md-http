@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -141,8 +142,15 @@ func parse(args []string, output io.Writer) (argsStruct, error) {
 	return *receiver, nil
 }
 
-// run does the real logic of reading the file and running the server
 func run(ctx context.Context, parsedArgs argsStruct) error {
+	listener, err := net.Listen("tcp", parsedArgs.AddrPort.String())
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+	return runOnListener(ctx, parsedArgs, listener)
+}
+
+func runOnListener(ctx context.Context, parsedArgs argsStruct, listener net.Listener) error {
 	slog.Debug("reading markdown file", "path", parsedArgs.MarkdownFile)
 	raw, err := os.ReadFile(parsedArgs.MarkdownFile)
 	if err != nil {
@@ -261,7 +269,6 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 	})
 
 	server := &http.Server{
-		Addr: parsedArgs.AddrPort.String(),
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
 			mux.ServeHTTP(recorder, request)
@@ -278,8 +285,8 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 			slog.Error("Failure during shutdown", "err", err)
 		}
 	}()
-	slog.Info("Starting http server", "listen", "http://"+parsedArgs.AddrPort.String())
-	return server.ListenAndServe()
+	slog.Info("Starting http server", "listen", "http://"+listener.Addr().String())
+	return server.Serve(listener)
 }
 
 type responseRecorder struct {
