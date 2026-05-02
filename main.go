@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -116,7 +115,10 @@ func parse(args []string, output io.Writer) (argsStruct, error) {
 			}
 		}
 	})
-	if err := fs.Parse(args[1:]); err != nil {
+	if err != nil {
+		return *receiver, err
+	}
+	if err = fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return *receiver, http.ErrServerClosed
 		}
@@ -147,6 +149,8 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		return fmt.Errorf("failed to open the file: %w", err)
 	}
 
+	mux := http.NewServeMux()
+
 	if parsedArgs.CssUrl != "" && !strings.HasPrefix(parsedArgs.CssUrl, "http://") && !strings.HasPrefix(parsedArgs.CssUrl, "https://") {
 		parsedArgs.CssUrl = strings.TrimPrefix(parsedArgs.CssUrl, "file://")
 		slog.Debug("reading css file", "path", parsedArgs.CssUrl)
@@ -154,7 +158,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		if err != nil {
 			return fmt.Errorf("failed to read the css file: %v", err)
 		}
-		http.HandleFunc("/default.css", func(writer http.ResponseWriter, request *http.Request) {
+		mux.HandleFunc("/default.css", func(writer http.ResponseWriter, request *http.Request) {
 			if request.Method != "GET" {
 				writer.WriteHeader(http.StatusMethodNotAllowed)
 				return
@@ -174,7 +178,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		}
 		ext := filepath.Ext(parsedArgs.FaviconUrl)
 		parsedArgs.FaviconUrl = "default-favicon" + ext
-		http.HandleFunc("/"+parsedArgs.FaviconUrl, func(writer http.ResponseWriter, request *http.Request) {
+		mux.HandleFunc("/"+parsedArgs.FaviconUrl, func(writer http.ResponseWriter, request *http.Request) {
 			if request.Method != "GET" {
 				writer.WriteHeader(http.StatusMethodNotAllowed)
 				return
@@ -216,7 +220,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 			blackfriday.EXTENSION_AUTO_HEADER_IDS,
 	)
 
-	http.HandleFunc("/healthz", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != "GET" {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -225,7 +229,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		_, _ = writer.Write([]byte("healthz check passed"))
 	})
 
-	http.HandleFunc("/favicon.ico", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/favicon.ico", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != "GET" {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -239,7 +243,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 	})
 
 	hashString := fmt.Sprintf("%x", sha256.Sum256(htmlContent))
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != "GET" {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -248,8 +252,6 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 			writer.WriteHeader(http.StatusPreconditionFailed)
 			return
 		} else if v := request.Header.Get("If-None-Match"); v != "" && v == hashString {
-			writer.Header().Set("Content-Length", strconv.Itoa(len(htmlContent)))
-			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 			writer.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -262,7 +264,7 @@ func run(ctx context.Context, parsedArgs argsStruct) error {
 		Addr: parsedArgs.AddrPort.String(),
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			recorder := &responseRecorder{Inner: writer, StatusCode: http.StatusOK}
-			http.DefaultServeMux.ServeHTTP(recorder, request)
+			mux.ServeHTTP(recorder, request)
 			slog.Info("response", "method", request.Method, "uri", request.RequestURI, "status", recorder.StatusCode, "bytes", recorder.Written)
 		}),
 		IdleTimeout:  time.Second * 30,

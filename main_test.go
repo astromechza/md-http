@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -48,8 +47,6 @@ func TestRunNominal(t *testing.T) {
 	faviconPath := filepath.Join(t.TempDir(), "some.png")
 	require.NoError(t, os.WriteFile(faviconPath, []byte(""), 0400))
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
 	go func() {
 		assert.EqualError(t, run(ctx, argsStruct{
 			AddrPort:     addrPort,
@@ -164,7 +161,6 @@ func TestRunNominal(t *testing.T) {
 	})
 
 	cancel()
-	wg.Done()
 }
 
 func TestParse_minimum(t *testing.T) {
@@ -199,6 +195,47 @@ func TestParse_all(t *testing.T) {
 		LogDebug:     true,
 		LogJson:      true,
 	}, args)
+}
+
+func TestParse_invalidEnvVar(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# header\n"), 0400))
+
+	t.Setenv("MDHTTP_debug", "not-a-bool")
+
+	buff := new(bytes.Buffer)
+	_, err := parse([]string{"binary", mdPath}, buff)
+	require.Error(t, err)
+}
+
+func TestRun_isolatedMux(t *testing.T) {
+	mdPath := filepath.Join(t.TempDir(), "example.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("# header\n"), 0400))
+
+	startServer := func() (int, context.CancelFunc) {
+		port, err := freePort()
+		require.NoError(t, err)
+		addr, err := netip.ParseAddrPort(fmt.Sprintf("127.0.0.1:%d", port))
+		require.NoError(t, err)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			assert.ErrorIs(t, run(ctx, argsStruct{AddrPort: addr, MarkdownFile: mdPath}), http.ErrServerClosed)
+		}()
+		require.Eventually(t, func() bool {
+			resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
+			if err != nil {
+				return false
+			}
+			resp.Body.Close()
+			return true
+		}, 5*time.Second, 10*time.Millisecond)
+		return port, cancel
+	}
+
+	_, cancel1 := startServer()
+	defer cancel1()
+	_, cancel2 := startServer()
+	defer cancel2()
 }
 
 func TestParse_env(t *testing.T) {
