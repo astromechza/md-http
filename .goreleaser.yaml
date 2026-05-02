@@ -1,10 +1,6 @@
 version: 2
 project_name: md-http
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: md-http
     main: .

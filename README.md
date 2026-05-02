@@ -50,18 +50,26 @@ Usage: md-http [options...] <filepath>
 ...
 ```
 
-### Install inside your own Docker image
+### Docker
 
-I don't host a Docker image for this binary. If you want to embed it in an image, use a multistep builder. See [Dockerfile](./Dockerfile):
+Pre-built multi-arch images (linux/amd64, linux/arm64) are published to GHCR on each release:
 
 ```
-FROM golang:1-alpine AS builder
-RUN go install -v github.com/astromechza/md-http@latest
+docker run -v $PWD/your-file.md:/doc.md -p 8080:8080 ghcr.io/astromechza/md-http:latest /doc.md
+```
 
-FROM alpine
-COPY --from=builder /go/bin/md-http /md-http
-RUN echo "hello world" > markdown.md
-ENTRYPOINT ["/md-http", "markdown.md"]
+To extend the image with your own content:
+
+```dockerfile
+FROM ghcr.io/astromechza/md-http:latest
+COPY your-file.md /doc.md
+ENTRYPOINT ["/md-http", "/doc.md"]
+```
+
+To build locally from source using GoReleaser (requires Docker with buildx):
+
+```
+goreleaser release --snapshot --clean --skip=publish
 ```
 
 ### Git clone and build
