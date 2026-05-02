@@ -1,0 +1,91 @@
+version: 2
+project_name: md-http
+
+builds:
+  - id: md-http
+    main: .
+    binary: md-http
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+dockers:
+  - id: md-http-amd64
+    image_templates:
+      - "ghcr.io/astromechza/md-http:{{ .Version }}-amd64"
+      - "ghcr.io/astromechza/md-http:latest-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Serve markdown files as HTML over HTTP"
+      - "--label=org.opencontainers.image.source=https://github.com/astromechza/md-http"
+      - "--label=org.opencontainers.image.url=https://github.com/astromechza/md-http"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+  - id: md-http-arm64
+    image_templates:
+      - "ghcr.io/astromechza/md-http:{{ .Version }}-arm64"
+      - "ghcr.io/astromechza/md-http:latest-arm64"
+    use: buildx
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Serve markdown files as HTML over HTTP"
+      - "--label=org.opencontainers.image.source=https://github.com/astromechza/md-http"
+      - "--label=org.opencontainers.image.url=https://github.com/astromechza/md-http"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+docker_manifests:
+  - name_template: "ghcr.io/astromechza/md-http:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/astromechza/md-http:{{ .Version }}-amd64"
+      - "ghcr.io/astromechza/md-http:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/astromechza/md-http:latest"
+    image_templates:
+      - "ghcr.io/astromechza/md-http:latest-amd64"
+      - "ghcr.io/astromechza/md-http:latest-arm64"
+
+release:
+  github:
+    owner: astromechza
+    name: md-http
